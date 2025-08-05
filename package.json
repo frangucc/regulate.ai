@@ -1,0 +1,45 @@
+{
+  "name": "regulate.ai",
+  "version": "1.0.0",
+  "description": "AI-powered regulatory compliance platform for label validation",
+  "type": "module",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend",
+    "shared",
+    "workers"
+  ],
+  "scripts": {
+    "dev": "npm run dev:kill && concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:kill": "./scripts/kill-ports.sh",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:workers": "cd workers && npm run dev",
+    "temporal:worker": "node temporal/worker.js",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && npm run build",
+    "test": "npm run test --workspaces",
+    "db:migrate": "cd backend && npx prisma migrate dev",
+    "db:generate": "cd backend && npx prisma generate",
+    "db:studio": "cd backend && npx prisma studio",
+    "client": "node temporal/test-client.js",
+    "temporal:test": "node temporal/test-client.js",
+    "ocr:test": "node temporal/test-ocr.js"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@heroicons/react": "^2.2.0",
+    "@temporalio/activity": "^1.12.1",
+    "@temporalio/client": "^1.12.1",
+    "@temporalio/worker": "^1.12.1",
+    "openai": "^5.12.0",
+    "tesseract.js": "^6.0.1"
+  }
+}

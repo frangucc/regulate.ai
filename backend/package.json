@@ -1,0 +1,42 @@
+{
+  "name": "@regulate.ai/backend",
+  "version": "1.0.0",
+  "description": "GraphQL API server for regulate.ai",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "build": "echo 'Backend build complete'",
+    "test": "vitest",
+    "db:migrate": "prisma migrate dev",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.17.1",
+    "@auth/core": "^0.18.6",
+    "@auth/express": "^0.5.6",
+    "@aws-sdk/client-s3": "^3.490.0",
+    "@aws-sdk/s3-request-presigner": "^3.490.0",
+    "@graphql-tools/schema": "^10.0.25",
+    "@modelcontextprotocol/sdk": "^0.4.0",
+    "@prisma/client": "^5.7.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "dotenv-safe": "^9.1.0",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "graphql-yoga": "^5.1.1",
+    "multer": "^2.0.2",
+    "pg-boss": "^9.0.3",
+    "pino": "^8.17.2",
+    "pino-pretty": "^10.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.1.6",
+    "nodemon": "^3.0.2",
+    "prisma": "^5.7.1",
+    "vitest": "^1.1.3"
+  }
+}

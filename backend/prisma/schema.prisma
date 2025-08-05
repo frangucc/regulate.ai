@@ -1,0 +1,158 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model LabelProject {
+  id          String   @id @default(cuid())
+  name        String
+  uploadDate  DateTime @default(now())
+  clientId    String?
+  status      String   @default("pending") // pending, processing, reviewing, approved
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  components  LabelComponent[]
+  issues      ValidationIssue[]
+  
+  @@map("label_projects")
+}
+
+model LabelComponent {
+  id            String  @id @default(cuid())
+  labelId       String
+  type          String  // nutrition_panel, allergen_warning, ingredient_list, etc.  
+  boundingBox   Json    // {x, y, width, height}
+  extractedText String?
+  confidence    Float?
+  createdAt     DateTime @default(now())
+  
+  // Relations
+  label         LabelProject @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  issues        ValidationIssue[]
+  
+  @@map("label_components")
+}
+
+model ValidatorAgent {
+  id           String @id @default(cuid())
+  name         String
+  type         String // nutrition, allergen, chemical, etc.
+  sourceRules  Json   // Regulatory rules and logic
+  isActive     Boolean @default(true)
+  createdAt    DateTime @default(now())
+  
+  // Relations  
+  issues       ValidationIssue[]
+  
+  @@map("validator_agents")
+}
+
+model ValidationIssue {
+  id          String @id @default(cuid())
+  labelId     String
+  componentId String
+  validatorId String
+  issueType   String
+  severity    String // low, medium, high, critical
+  notes       String
+  status      String @default("open") // open, investigating, resolved, approved
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  label       LabelProject @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  component   LabelComponent @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  validator   ValidatorAgent @relation(fields: [validatorId], references: [id])
+  cards       IssueCard[]
+  
+  @@map("validation_issues")
+}
+
+model IssueCard {
+  id         String @id @default(cuid())
+  issueId    String
+  assignee   String?
+  status     String @default("open") // open, investigating, revised, approved
+  comments   Json   @default("[]") // Array of comment objects
+  revisions  Json   @default("[]") // Array of revision objects
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  // Relations
+  issue      ValidationIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  
+  @@map("issue_cards")
+}
+
+model SystemTestRun {
+  id               String   @id @default(cuid())
+  status           String   // pass, fail, incomplete
+  overallHealth    String   // HEALTHY, DEGRADED, ERROR
+  
+  // Individual component statuses
+  systemStatus     String   // pass, fail, incomplete
+  environmentStatus String  // pass, fail, incomplete  
+  databaseStatus   String   // pass, fail, incomplete
+  apiStatus        String   // pass, fail, incomplete
+  frontendStatus   String   // pass, fail, incomplete
+  integrationStatus String  // pass, fail, incomplete
+  
+  // Service-specific details
+  dbHealth         String?  // OK, ERROR
+  s3Health         String?  // OK, ERROR
+  anthropicHealth  String?  // OK, ERROR
+  
+  // Response times
+  databaseTime     Int?     // Response time in ms
+  s3Time           Int?     // Response time in ms  
+  anthropicTime    Int?     // Response time in ms
+  totalTestTime    Int?     // Total test duration in ms
+  
+  // Failure tracking
+  failedComponents Json?    // Array of failed component names
+  errorMessages    Json?    // Detailed error messages per component
+  culprits         Json?    // Specific services/configs that caused failures
+  
+  // Performance tracking
+  performanceGrade String?  // A, B, C, D, F based on response times
+  baselineDeviation Float? // % deviation from normal response times
+  
+  // Recovery tracking
+  recoveryTime     Int?     // Time to recover from last failure (ms)
+  consecutiveFails Int?     // Number of consecutive failures
+  
+  // Environment & alerts
+  environment      String   @default("development") // development, staging, production
+  tags             Json?    // ["deployment", "critical", "scheduled"]
+  alertsSent       Json?    // Which alerts were triggered
+  notificationIds  Json?    // External notification system IDs
+  
+  // Metadata
+  triggeredBy      String   @default("auto") // auto, manual, deployment, startup
+  browserInfo      String?  // User agent if triggered from browser
+  serverVersion    String?  // Backend version/commit
+  createdAt        DateTime @default(now())
+  
+  @@map("system_test_runs")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      String   @default("reviewer") // admin, reviewer, validator, observer
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("users")
+}
