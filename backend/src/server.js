@@ -6,9 +6,17 @@ import dotenv from 'dotenv'
 import { PrismaClient } from '@prisma/client'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import Anthropic from '@anthropic-ai/sdk'
+import { fileURLToPath } from 'url'
+import path from 'path'
 import pino from 'pino'
 import { makeExecutableSchema } from '@graphql-tools/schema'
 import multer from 'multer'
+import fetch from 'node-fetch'
+import { spawn } from 'child_process'
+
+// ES module __dirname equivalent
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 // Load environment variables
 dotenv.config({ path: '../.env' })
@@ -410,6 +418,50 @@ app.post('/ocr-validate', upload.single('file'), async (req, res) => {
       }
     }
     
+    // Step 3: Run FDA Validation (if AI validation succeeded and extracted ingredients)
+    let fdaValidation = null
+    if (aiValidation && aiValidation.extractedInformation) {
+      try {
+        // Import FDA validation functions
+        const { validateIngredientsWithFDA, validateNutritionalClaimsWithFDA } = await import('../../temporal/activities/fdaValidation.js')
+        
+        // Validate ingredients against FDA databases
+        const fdaResponse = await validateIngredientsWithFDA({
+          ingredients: aiValidation.extractedInformation.ingredients || [],
+          extractedInformation: aiValidation.extractedInformation
+        })
+        
+        if (fdaResponse.success) {
+          fdaValidation = fdaResponse.fdaValidation
+          logger.info(`FDA validation completed: ${fdaValidation.issues.length} issues, ${fdaValidation.recommendations.length} recommendations`)
+        } else {
+          logger.warn('FDA validation failed:', fdaResponse.error)
+          fdaValidation = fdaResponse.fdaValidation || {
+            issues: [{
+              type: 'FDA_VALIDATION_ERROR',
+              severity: 'ERROR',
+              message: `FDA validation failed: ${fdaResponse.error}`,
+              source: 'FDA MCP Server',
+              sourceTag: 'FDA-ERROR',
+              timestamp: new Date().toISOString()
+            }]
+          }
+        }
+      } catch (error) {
+        logger.error('FDA validation error:', error)
+        fdaValidation = {
+          issues: [{
+            type: 'FDA_VALIDATION_ERROR',
+            severity: 'ERROR',
+            message: `FDA validation system error: ${error.message}`,
+            source: 'FDA MCP Integration',
+            sourceTag: 'FDA-ERROR',
+            timestamp: new Date().toISOString()
+          }]
+        }
+      }
+    }
+    
     // Prepare response
     const response = {
       success: true,
@@ -448,6 +500,15 @@ app.post('/ocr-validate', upload.single('file'), async (req, res) => {
       } : {
         error: 'AI validation not performed - no text extracted',
         isValid: false
+      },
+      
+      // FDA Validation Results
+      fdaValidation: fdaValidation || {
+        issues: [],
+        recommendations: [],
+        summary: {
+          message: 'FDA validation not performed - no ingredients extracted'
+        }
       }
     }
     
@@ -488,7 +549,8 @@ app.get('/env-check', (req, res) => {
     s3Bucket: !!process.env.S3_BUCKET_NAME,
     temporalApiKey: !!process.env.TEMPORAL_API_KEY,
     temporalNamespace: !!process.env.TEMPORAL_NAMESPACE,
-    temporalAddress: !!process.env.TEMPORAL_ADDRESS
+    temporalAddress: !!process.env.TEMPORAL_ADDRESS,
+    fdaApiKey: !!process.env.FDA_API_KEY
   }
   
   const allPresent = Object.values(requiredVars).every(present => present)
@@ -498,6 +560,211 @@ app.get('/env-check', (req, res) => {
     variables: requiredVars,
     timestamp: new Date().toISOString()
   })
+})
+
+// MCP Server Health Testing endpoint
+app.post('/test-mcp-health', async (req, res) => {
+  const { testType, testIngredients, testClaims } = req.body
+  
+  try {
+    switch (testType) {
+      case 'health':
+        // Test basic MCP server spawn and communication
+        try {
+          const mcpServerPath = path.join(__dirname, '../../mcp-servers/fda-validation/index.js')
+          
+          const testRequest = {
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/list',
+            params: {}
+          }
+          
+          const child = spawn('node', [mcpServerPath], { stdio: ['pipe', 'pipe', 'pipe'] })
+          
+          let responseData = ''
+          child.stdout.on('data', (data) => {
+            responseData += data.toString()
+          })
+          
+          child.on('close', (code) => {
+            if (code === 0 || responseData.includes('tools')) {
+              res.json({ success: true, message: 'MCP server can spawn and respond' })
+            } else {
+              res.json({ success: false, message: 'MCP server failed to start properly' })
+            }
+          })
+          
+          child.stdin.write(JSON.stringify(testRequest) + '\n')
+          child.stdin.end()
+          
+          // Timeout after 5 seconds
+          setTimeout(() => {
+            child.kill()
+            res.json({ success: false, message: 'MCP server health check timeout' })
+          }, 5000)
+          
+        } catch (error) {
+          res.json({ success: false, message: `MCP server spawn error: ${error.message}` })
+        }
+        break
+        
+      case 'fda_api':
+        // Test FDA API key and connection
+        const fdaApiKey = process.env.FDA_API_KEY
+        if (!fdaApiKey) {
+          res.json({ success: false, message: 'FDA_API_KEY environment variable not set' })
+          return
+        }
+        
+        try {
+          // Test FDA API connection with a simple request
+          const testUrl = `https://api.nal.usda.gov/fdc/v1/foods/search?query=water&api_key=${fdaApiKey}&pageSize=1`
+          const fdaResponse = await fetch(testUrl)
+          
+          if (fdaResponse.ok) {
+            res.json({ success: true, message: 'FDA API connection successful' })
+          } else {
+            res.json({ success: false, message: `FDA API returned ${fdaResponse.status}: ${fdaResponse.statusText}` })
+          }
+        } catch (error) {
+          res.json({ success: false, message: `FDA API connection error: ${error.message}` })
+        }
+        break
+        
+      case 'ingredient_validation':
+        // Test ingredient validation through MCP server
+        try {
+          const { validateIngredientsWithFDA } = await import('../../temporal/activities/fdaValidation.js')
+          const testData = {
+            ocrText: 'Water, Sugar, Salt',
+            ingredients: testIngredients || ['water', 'sugar', 'salt']
+          }
+          
+          const result = await validateIngredientsWithFDA(testData)
+          
+          if (result.issues || result.recommendations) {
+            res.json({ success: true, message: `Validated ${testData.ingredients.length} ingredients successfully` })
+          } else {
+            res.json({ success: false, message: 'Ingredient validation returned no results' })
+          }
+        } catch (error) {
+          res.json({ success: false, message: `Ingredient validation error: ${error.message}` })
+        }
+        break
+        
+      case 'allergen_check':
+        // Test allergen checking functionality
+        try {
+          const mcpServerPath = path.join(__dirname, '../../mcp-servers/fda-validation/index.js')
+          
+          const testRequest = {
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: {
+              name: 'check_allergen_requirements',
+              arguments: {
+                ingredients: testIngredients || ['wheat', 'milk', 'eggs'],
+                productType: 'packaged_food'
+              }
+            }
+          }
+          
+          const child = spawn('node', [mcpServerPath], { stdio: ['pipe', 'pipe', 'pipe'] })
+          
+          let responseData = ''
+          child.stdout.on('data', (data) => {
+            responseData += data.toString()
+          })
+          
+          child.on('close', (code) => {
+            try {
+              if (responseData.includes('allergen') || responseData.includes('requirements')) {
+                res.json({ success: true, message: 'Allergen checking functional' })
+              } else {
+                res.json({ success: false, message: 'Allergen checking returned unexpected response' })
+              }
+            } catch (parseError) {
+              res.json({ success: false, message: `Allergen check parse error: ${parseError.message}` })
+            }
+          })
+          
+          child.stdin.write(JSON.stringify(testRequest) + '\n')
+          child.stdin.end()
+          
+          setTimeout(() => {
+            child.kill()
+            res.json({ success: false, message: 'Allergen check timeout' })
+          }, 5000)
+          
+        } catch (error) {
+          res.json({ success: false, message: `Allergen check error: ${error.message}` })
+        }
+        break
+        
+      case 'nutritional_claims':
+        // Test nutritional claims validation
+        try {
+          const mcpServerPath = path.join(__dirname, '../../mcp-servers/fda-validation/index.js')
+          
+          const testRequest = {
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: {
+              name: 'validate_nutritional_claims',
+              arguments: {
+                claims: testClaims || ['Low Fat', 'High Fiber', 'No Added Sugar'],
+                nutritionalData: {
+                  fat: 2,
+                  fiber: 8,
+                  addedSugars: 0
+                }
+              }
+            }
+          }
+          
+          const child = spawn('node', [mcpServerPath], { stdio: ['pipe', 'pipe', 'pipe'] })
+          
+          let responseData = ''
+          child.stdout.on('data', (data) => {
+            responseData += data.toString()
+          })
+          
+          child.on('close', (code) => {
+            try {
+              if (responseData.includes('claims') || responseData.includes('validation')) {
+                res.json({ success: true, message: 'Nutritional claims validation working' })
+              } else {
+                res.json({ success: false, message: 'Claims validation returned unexpected response' })
+              }
+            } catch (parseError) {
+              res.json({ success: false, message: `Claims validation parse error: ${parseError.message}` })
+            }
+          })
+          
+          child.stdin.write(JSON.stringify(testRequest) + '\n')
+          child.stdin.end()
+          
+          setTimeout(() => {
+            child.kill()
+            res.json({ success: false, message: 'Claims validation timeout' })
+          }, 5000)
+          
+        } catch (error) {
+          res.json({ success: false, message: `Claims validation error: ${error.message}` })
+        }
+        break
+        
+      default:
+        res.status(400).json({ success: false, message: `Unknown test type: ${testType}` })
+    }
+    
+  } catch (error) {
+    console.error('MCP health test error:', error)
+    res.status(500).json({ success: false, message: `Server error: ${error.message}` })
+  }
 })
 
 // GraphQL endpoint

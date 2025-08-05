@@ -70,7 +70,7 @@ export async function performAIValidation(data) {
 OCR-Extracted Text:
 ${ocrText}
 
-TASK: Please provide verbatim transcription and analysis:
+TASK: Please provide verbatim transcription and comprehensive analysis:
 
 1. TRANSCRIBE the text exactly as it appears - line-by-line, preserving:
    - Line breaks and spacing
@@ -81,7 +81,14 @@ TASK: Please provide verbatim transcription and analysis:
 
 2. IDENTIFY obvious OCR errors (garbled characters, impossible words)
 
-3. EXTRACT key regulatory information if clearly visible
+3. EXTRACT comprehensive regulatory information including:
+   - Complete nutritional facts with % Daily Values
+   - All vitamins and minerals with percentages
+   - Ingredient lists and allergens
+   - FDA disclaimers and warnings
+   - Claims and certifications
+
+4. ASSESS regulatory compliance and provide specific recommendations
 
 Respond ONLY in valid JSON format:
 \`\`\`json
@@ -96,14 +103,34 @@ Respond ONLY in valid JSON format:
     "warnings": "Warning text if present",
     "directions": "Usage directions if present",
     "nutritionalInfo": {
-      "servingSize": "1 cup",
-      "calories": "100"
-    }
+      "servingSize": "2/3 cup (55g)",
+      "servingsPerContainer": "8",
+      "calories": "230",
+      "totalFat": "8g",
+      "totalFatDV": "10%",
+      "saturatedFat": "1g",
+      "saturatedFatDV": "5%",
+      "transFat": "0g",
+      "cholesterol": "0mg",
+      "sodium": "160mg",
+      "sodiumDV": "7%",
+      "totalCarbohydrate": "37g",
+      "dietaryFiber": "4g",
+      "totalSugars": "12g",
+      "addedSugars": "10g",
+      "protein": "3g",
+      "vitaminD": "2mcg",
+      "calcium": "260mg",
+      "iron": "8mg",
+      "potassium": "235mg"
+    },
+    "allergens": ["Contains milk", "May contain nuts"],
+    "claims": ["Good source of fiber", "Low sodium"]
   },
-  "ocrIssuesFound": ["Specific OCR errors identified"],
+  "ocrIssuesFound": ["Specific OCR errors identified, e.g., 'Og' should be '0g'"],
   "completenessScore": 7,
-  "complianceIssues": ["Missing required information"],
-  "recommendations": ["Specific suggestions"],
+  "complianceIssues": ["Missing required allergen statement", "Incomplete nutritional information"],
+  "recommendations": ["Fix OCR error in serving size weight", "Verify % Daily Values calculations", "Add missing vitamin information"],
   "qualityImprovement": "Moderate"
 }
 \`\`\`
@@ -288,12 +315,12 @@ export async function extractStructuredInfo(validatedText) {
   console.log('📋 Extracting structured information...');
   
   try {
-    const prompt = `Extract structured information from this product label text. Focus on regulatory compliance elements:
+    const prompt = `Extract comprehensive structured information from this product label text. Include ALL nutritional data, % Daily Values, vitamins, minerals, and regulatory elements:
 
 Label text:
 ${validatedText}
 
-Extract and return in JSON format:
+Extract and return in JSON format with comprehensive nutritional facts:
 \`\`\`json
 {
   "productName": "Name of the product",
@@ -304,16 +331,53 @@ Extract and return in JSON format:
   "directions": "Usage directions",
   "netWeight": "Product weight/volume",
   "nutritionalInfo": {
-    "calories": "per serving",
-    "other": "nutritional facts"
+    "servingSize": "2/3 cup (55g)",
+    "servingsPerContainer": "8",
+    "calories": "230",
+    "totalFat": "8g",
+    "totalFatDV": "10%",
+    "saturatedFat": "1g",
+    "saturatedFatDV": "5%",
+    "transFat": "0g",
+    "cholesterol": "0mg",
+    "cholesterolDV": "0%",
+    "sodium": "160mg",
+    "sodiumDV": "7%",
+    "totalCarbohydrate": "37g",
+    "totalCarbohydrateDV": "13%",
+    "dietaryFiber": "4g",
+    "dietaryFiberDV": "14%",
+    "totalSugars": "12g",
+    "addedSugars": "10g",
+    "addedSugarsDV": "20%",
+    "protein": "3g",
+    "vitaminD": "2mcg",
+    "vitaminDDV": "10%",
+    "calcium": "260mg",
+    "calciumDV": "20%",
+    "iron": "8mg",
+    "ironDV": "45%",
+    "potassium": "235mg",
+    "potassiumDV": "6%",
+    "vitaminA": "10%",
+    "vitaminC": "8%",
+    "otherVitamins": {"thiamin": "10%", "riboflavin": "6%", "niacin": "8%"},
+    "otherMinerals": {"phosphorus": "15%", "magnesium": "8%", "zinc": "4%"}
   },
   "regulatoryInfo": {
-    "fdaDisclaimer": "FDA disclaimer if present",
+    "fdaDisclaimer": "* The % Daily Value tells you how much a nutrient in a serving of food contributes to a daily diet. 2,000 calories a day is used for general nutrition advice.",
     "allergens": ["list", "of", "allergens"],
-    "claims": ["health", "claims"]
+    "claims": ["health", "claims"],
+    "nutritionClaims": ["low fat", "high fiber", "good source of"],
+    "upcCode": "Product UPC/barcode if visible",
+    "distributedBy": "Company information if present",
+    "bestBy": "Best by date format",
+    "lotNumber": "Lot/batch number if visible"
   }
 }
-\`\`\``;
+\`\`\`
+
+IMPORTANT: Extract ALL nutritional values with their % Daily Values when present. Include vitamins, minerals, and any disclaimers exactly as shown.`;
 
     const response = await anthropic.messages.create({
       model: 'claude-3-5-sonnet-20241022',

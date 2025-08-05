@@ -9,6 +9,10 @@
     "start": "node src/server.js",
     "build": "echo 'Backend build complete'",
     "test": "vitest",
+    "test:unit": "vitest temporal/activities/__tests__",
+    "test:integration": "vitest __tests__",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio"
@@ -37,6 +41,7 @@
     "@testing-library/jest-dom": "^6.1.6",
     "nodemon": "^3.0.2",
     "prisma": "^5.7.1",
+    "supertest": "^6.3.3",
     "vitest": "^1.1.3"
   }
 }

@@ -1,0 +1,30 @@
+{
+  "name": "fda-validation-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for FDA ingredient and nutritional validation",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "fda-validation-server": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --inspect index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "fda",
+    "validation",
+    "ingredients",
+    "nutrition",
+    "regulatory"
+  ],
+  "license": "MIT"
+}

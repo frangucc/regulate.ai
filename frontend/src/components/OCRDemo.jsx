@@ -124,6 +124,9 @@ const OCRDemo = () => {
           processingTime: data.aiValidation.processingTime
         },
         
+        // FDA Validation Results
+        fdaValidation: data.fdaValidation,
+        
         // Overall processing time
         totalProcessingTime: processingTime
       };
@@ -432,15 +435,99 @@ const OCRDemo = () => {
                     </div>
                   )}
 
-                  {activeTab === 'issues' && ocrResult.aiValidation && (
+                  {activeTab === 'issues' && (
                     <div>
-                      <div className="space-y-4">
-                        {ocrResult.aiValidation.complianceIssues?.length > 0 && (
+                      <div className="space-y-6">
+                        {/* FDA Validation Issues */}
+                        {ocrResult.fdaValidation?.issues?.length > 0 && (
                           <div>
-                            <h3 className="font-medium text-red-900 mb-3">🚨 Compliance Issues:</h3>
+                            <h3 className="font-medium text-red-900 mb-3 flex items-center">
+                              🏛️ FDA Regulatory Issues
+                              <span className="ml-2 px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">FDA-MCP</span>
+                            </h3>
+                            <ul className="space-y-3">
+                              {ocrResult.fdaValidation.issues.map((issue, idx) => (
+                                <li key={`fda-issue-${idx}`} className={`border rounded-lg p-4 text-sm ${
+                                  issue.severity === 'COMPLIANCE' ? 'bg-red-50 border-red-200 text-red-800' :
+                                  issue.severity === 'WARNING' ? 'bg-orange-50 border-orange-200 text-orange-800' :
+                                  'bg-gray-50 border-gray-200 text-gray-800'
+                                }`}>
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="font-medium mb-1">
+                                        {issue.type?.replace(/_/g, ' ') || 'FDA Issue'}
+                                        {issue.ingredient && (
+                                          <span className="ml-2 text-xs bg-white bg-opacity-50 px-2 py-1 rounded">
+                                            {issue.ingredient}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="mb-2">{issue.message}</p>
+                                      {issue.regulation && (
+                                        <p className="text-xs opacity-75 font-mono">{issue.regulation}</p>
+                                      )}
+                                    </div>
+                                    <div className="ml-3 flex-shrink-0">
+                                      <span className={`px-2 py-1 text-xs rounded-full ${
+                                        issue.sourceTag === 'FDA-ALLERGEN' ? 'bg-yellow-100 text-yellow-800' :
+                                        issue.sourceTag === 'FDA-INGREDIENT' ? 'bg-blue-100 text-blue-800' :
+                                        issue.sourceTag === 'FDA-CLAIMS' ? 'bg-purple-100 text-purple-800' :
+                                        'bg-gray-100 text-gray-800'
+                                      }`}>
+                                        {issue.sourceTag || 'FDA'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* FDA Recommendations */}
+                        {ocrResult.fdaValidation?.recommendations?.length > 0 && (
+                          <div>
+                            <h3 className="font-medium text-blue-900 mb-3 flex items-center">
+                              💡 FDA Recommendations
+                              <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">FDA-MCP</span>
+                            </h3>
+                            <ul className="space-y-3">
+                              {ocrResult.fdaValidation.recommendations.map((rec, idx) => (
+                                <li key={`fda-rec-${idx}`} className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="font-medium mb-1">
+                                        {rec.type?.replace(/_/g, ' ') || 'FDA Recommendation'}
+                                        {rec.ingredient && (
+                                          <span className="ml-2 text-xs bg-white bg-opacity-50 px-2 py-1 rounded">
+                                            {rec.ingredient}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p>{rec.message}</p>
+                                    </div>
+                                    <div className="ml-3 flex-shrink-0">
+                                      <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
+                                        {rec.sourceTag || 'FDA'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* AI Validation Issues */}
+                        {ocrResult.aiValidation?.complianceIssues?.length > 0 && (
+                          <div>
+                            <h3 className="font-medium text-red-900 mb-3 flex items-center">
+                              🤖 AI Analysis Issues
+                              <span className="ml-2 px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">AI-CLAUDE</span>
+                            </h3>
                             <ul className="space-y-2">
                               {ocrResult.aiValidation.complianceIssues.map((issue, idx) => (
-                                <li key={idx} className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-800">
+                                <li key={`ai-issue-${idx}`} className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
                                   {issue}
                                 </li>
                               ))}
@@ -448,12 +535,16 @@ const OCRDemo = () => {
                           </div>
                         )}
                         
-                        {ocrResult.aiValidation.recommendations?.length > 0 && (
+                        {/* AI Validation Recommendations */}
+                        {ocrResult.aiValidation?.recommendations?.length > 0 && (
                           <div>
-                            <h3 className="font-medium text-blue-900 mb-3">💡 Recommendations:</h3>
+                            <h3 className="font-medium text-blue-900 mb-3 flex items-center">
+                              🤖 AI Recommendations
+                              <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">AI-CLAUDE</span>
+                            </h3>
                             <ul className="space-y-2">
                               {ocrResult.aiValidation.recommendations.map((rec, idx) => (
-                                <li key={idx} className="bg-blue-50 border border-blue-200 rounded p-3 text-sm text-blue-800">
+                                <li key={`ai-rec-${idx}`} className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
                                   {rec}
                                 </li>
                               ))}
@@ -461,10 +552,33 @@ const OCRDemo = () => {
                           </div>
                         )}
 
-                        {(!ocrResult.aiValidation.complianceIssues?.length && !ocrResult.aiValidation.recommendations?.length) && (
+                        {/* No Issues Found */}
+                        {(!ocrResult.fdaValidation?.issues?.length && 
+                          !ocrResult.fdaValidation?.recommendations?.length &&
+                          !ocrResult.aiValidation?.complianceIssues?.length && 
+                          !ocrResult.aiValidation?.recommendations?.length) && (
                           <div className="text-center py-8 text-gray-500">
                             <div className="text-4xl mb-2">✅</div>
-                            <p>No issues or recommendations found</p>
+                            <p>No regulatory issues or recommendations found</p>
+                            <p className="text-sm mt-1">Label appears to be compliant</p>
+                          </div>
+                        )}
+
+                        {/* FDA Validation Summary */}
+                        {ocrResult.fdaValidation?.summary && (
+                          <div className="mt-6 pt-4 border-t border-gray-200">
+                            <h4 className="font-medium text-gray-900 mb-2">📊 Validation Summary</h4>
+                            <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700">
+                              {ocrResult.fdaValidation.summary.totalIssues !== undefined && (
+                                <p>FDA Issues Found: {ocrResult.fdaValidation.summary.totalIssues}</p>
+                              )}
+                              {ocrResult.fdaValidation.summary.ingredientsValidated !== undefined && (
+                                <p>Ingredients Validated: {ocrResult.fdaValidation.ingredientsValidated}</p>
+                              )}
+                              {ocrResult.fdaValidation.summary.message && (
+                                <p>{ocrResult.fdaValidation.summary.message}</p>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
