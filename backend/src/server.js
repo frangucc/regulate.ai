@@ -570,6 +570,7 @@ app.post('/test-mcp-health', async (req, res) => {
     switch (testType) {
       case 'health':
         // Test basic MCP server spawn and communication
+        let responseSent = false
         try {
           const mcpServerPath = path.join(__dirname, '../../mcp-servers/fda-validation/index.js')
           
@@ -580,18 +581,25 @@ app.post('/test-mcp-health', async (req, res) => {
             params: {}
           }
           
-          const child = spawn('node', [mcpServerPath], { stdio: ['pipe', 'pipe', 'pipe'] })
+          const child = spawn('node', [mcpServerPath], {
+            cwd: process.cwd(),
+            stdio: ['pipe', 'pipe', 'pipe']
+          })
           
           let responseData = ''
+          
           child.stdout.on('data', (data) => {
             responseData += data.toString()
           })
           
           child.on('close', (code) => {
-            if (code === 0 || responseData.includes('tools')) {
-              res.json({ success: true, message: 'MCP server can spawn and respond' })
-            } else {
-              res.json({ success: false, message: 'MCP server failed to start properly' })
+            if (!responseSent) {
+              responseSent = true
+              if (code === 0 || responseData.includes('tools')) {
+                res.json({ success: true, message: 'MCP server can spawn and respond' })
+              } else {
+                res.json({ success: false, message: 'MCP server failed to start properly' })
+              }
             }
           })
           
@@ -600,12 +608,17 @@ app.post('/test-mcp-health', async (req, res) => {
           
           // Timeout after 5 seconds
           setTimeout(() => {
-            child.kill()
-            res.json({ success: false, message: 'MCP server health check timeout' })
+            if (!responseSent) {
+              responseSent = true
+              child.kill()
+              res.json({ success: false, message: 'MCP server health check timeout' })
+            }
           }, 5000)
           
         } catch (error) {
-          res.json({ success: false, message: `MCP server spawn error: ${error.message}` })
+          if (!responseSent) {
+            res.json({ success: false, message: `MCP server spawn error: ${error.message}` })
+          }
         }
         break
         
@@ -655,6 +668,7 @@ app.post('/test-mcp-health', async (req, res) => {
         
       case 'allergen_check':
         // Test allergen checking functionality
+        let responseSentAllergen = false
         try {
           const mcpServerPath = path.join(__dirname, '../../mcp-servers/fda-validation/index.js')
           
@@ -679,14 +693,17 @@ app.post('/test-mcp-health', async (req, res) => {
           })
           
           child.on('close', (code) => {
-            try {
-              if (responseData.includes('allergen') || responseData.includes('requirements')) {
-                res.json({ success: true, message: 'Allergen checking functional' })
-              } else {
-                res.json({ success: false, message: 'Allergen checking returned unexpected response' })
+            if (!responseSentAllergen) {
+              responseSentAllergen = true
+              try {
+                if (responseData.includes('allergen') || responseData.includes('requirements')) {
+                  res.json({ success: true, message: 'Allergen checking functional' })
+                } else {
+                  res.json({ success: false, message: 'Allergen checking returned unexpected response' })
+                }
+              } catch (parseError) {
+                res.json({ success: false, message: `Allergen check parse error: ${parseError.message}` })
               }
-            } catch (parseError) {
-              res.json({ success: false, message: `Allergen check parse error: ${parseError.message}` })
             }
           })
           
@@ -694,17 +711,23 @@ app.post('/test-mcp-health', async (req, res) => {
           child.stdin.end()
           
           setTimeout(() => {
-            child.kill()
-            res.json({ success: false, message: 'Allergen check timeout' })
+            if (!responseSentAllergen) {
+              responseSentAllergen = true
+              child.kill()
+              res.json({ success: false, message: 'Allergen check timeout' })
+            }
           }, 5000)
           
         } catch (error) {
-          res.json({ success: false, message: `Allergen check error: ${error.message}` })
+          if (!responseSentAllergen) {
+            res.json({ success: false, message: `Allergen check error: ${error.message}` })
+          }
         }
         break
         
       case 'nutritional_claims':
         // Test nutritional claims validation
+        let responseSentClaims = false
         try {
           const mcpServerPath = path.join(__dirname, '../../mcp-servers/fda-validation/index.js')
           
@@ -733,14 +756,17 @@ app.post('/test-mcp-health', async (req, res) => {
           })
           
           child.on('close', (code) => {
-            try {
-              if (responseData.includes('claims') || responseData.includes('validation')) {
-                res.json({ success: true, message: 'Nutritional claims validation working' })
-              } else {
-                res.json({ success: false, message: 'Claims validation returned unexpected response' })
+            if (!responseSentClaims) {
+              responseSentClaims = true
+              try {
+                if (responseData.includes('claims') || responseData.includes('validation')) {
+                  res.json({ success: true, message: 'Nutritional claims validation working' })
+                } else {
+                  res.json({ success: false, message: 'Claims validation returned unexpected response' })
+                }
+              } catch (parseError) {
+                res.json({ success: false, message: `Claims validation parse error: ${parseError.message}` })
               }
-            } catch (parseError) {
-              res.json({ success: false, message: `Claims validation parse error: ${parseError.message}` })
             }
           })
           
@@ -748,12 +774,17 @@ app.post('/test-mcp-health', async (req, res) => {
           child.stdin.end()
           
           setTimeout(() => {
-            child.kill()
-            res.json({ success: false, message: 'Claims validation timeout' })
+            if (!responseSentClaims) {
+              responseSentClaims = true
+              child.kill()
+              res.json({ success: false, message: 'Claims validation timeout' })
+            }
           }, 5000)
           
         } catch (error) {
-          res.json({ success: false, message: `Claims validation error: ${error.message}` })
+          if (!responseSentClaims) {
+            res.json({ success: false, message: `Claims validation error: ${error.message}` })
+          }
         }
         break
         
